@@ -3,7 +3,13 @@
 .data/
 __pycache__/
 .pytest_cache/
+.mypy_cache/
+.ruff_cache/
 .tmp/
 .uv-cache/
+.coverage
+*.log
 *.py[cod]
+build/
+dist/
 models/
