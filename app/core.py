@@ -184,6 +184,56 @@ class TrigramLanguageModel:
         return [(word, probability / normalizer) for word, probability in ranked]
 
 
+def evaluate_next_token_prediction(
+    corpus: Iterable[str] | None = None, *, top_k: int = 3
+) -> dict[str, int | float]:
+    """Compare the trigram model with a unigram baseline on a deterministic holdout."""
+    if top_k < 1:
+        raise ValueError("top_k must be a positive integer.")
+
+    sentences = preprocess_corpus(corpus if corpus is not None else load_corpus())
+    if len(sentences) < 2:
+        raise ValueError("At least two non-empty clauses are required for evaluation.")
+
+    test_sentences = [sentence for index, sentence in enumerate(sentences) if index % 4 == 0]
+    train_sentences = [sentence for index, sentence in enumerate(sentences) if index % 4 != 0]
+    if not train_sentences or not test_sentences:
+        raise ValueError("The corpus must contain both training and test clauses.")
+
+    training_text = [" ".join(sentence[1:-1]) for sentence in train_sentences]
+    model = TrigramLanguageModel(training_text)
+    unigram_counts = Counter(
+        token for sentence in train_sentences for token in sentence if token != START_TOKEN
+    )
+    unigram_ranking = sorted(unigram_counts, key=lambda token: (-unigram_counts[token], token))
+
+    scored = 0
+    trigram_top_1 = trigram_top_k = unigram_top_1 = unigram_top_k = 0
+    for sentence in test_sentences:
+        for index in range(1, len(sentence)):
+            expected = sentence[index]
+            context = sentence[:index]
+            trigram_candidates = model.predict_next_words(context, top_k)
+            unigram_candidates = unigram_ranking[:top_k]
+            trigram_words = [word for word, _ in trigram_candidates]
+            scored += 1
+            trigram_top_1 += bool(trigram_words and trigram_words[0] == expected)
+            trigram_top_k += expected in trigram_words
+            unigram_top_1 += bool(unigram_candidates and unigram_candidates[0] == expected)
+            unigram_top_k += expected in unigram_candidates
+
+    return {
+        "training_clauses": len(train_sentences),
+        "test_clauses": len(test_sentences),
+        "tokens_scored": scored,
+        "top_k": top_k,
+        "trigram_top_1_accuracy": trigram_top_1 / scored,
+        "trigram_top_k_accuracy": trigram_top_k / scored,
+        "unigram_top_1_accuracy": unigram_top_1 / scored,
+        "unigram_top_k_accuracy": unigram_top_k / scored,
+    }
+
+
 _DEFAULT_MODEL = TrigramLanguageModel()
 
 

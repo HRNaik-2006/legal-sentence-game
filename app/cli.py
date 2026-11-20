@@ -7,7 +7,14 @@ import random
 import sys
 from typing import Callable, TextIO
 
-from .core import LEGAL_CLAUSES, STARTER_PROMPTS, assemble_sentence, predict_next_words, tokenize
+from .core import (
+    LEGAL_CLAUSES,
+    STARTER_PROMPTS,
+    assemble_sentence,
+    evaluate_next_token_prediction,
+    predict_next_words,
+    tokenize,
+)
 from .llm import classify_clause
 from .storage import record_round
 
@@ -74,12 +81,37 @@ def main(argv: list[str] | None = None) -> int:
     play_parser.add_argument("--rounds", type=int, default=None, help="Number of rounds before exiting (default: keep playing).")
     play_parser.add_argument("--data", default=None, help="History JSON path (default: .data/history.json).")
     play_parser.set_defaults(handler=lambda args: play(rounds=args.rounds, storage_path=args.data))
+    evaluate_parser = subparsers.add_parser(
+        "evaluate", help="Compare the built-in predictor with a unigram baseline."
+    )
+    evaluate_parser.set_defaults(handler=lambda _args: _print_evaluation())
     args = parser.parse_args(argv)
     if not hasattr(args, "handler"):
         parser.print_help()
         return 0
     args.handler(args)
     return 0
+
+
+def _print_evaluation() -> None:
+    """Print held-out next-token accuracy for the trigram model and baseline."""
+    result = evaluate_next_token_prediction()
+    top_k = result["top_k"]
+    print(
+        f"Built-in clauses: {result['training_clauses'] + result['test_clauses']} "
+        f"({result['training_clauses']} train, {result['test_clauses']} held out)"
+    )
+    print(f"Next tokens scored: {result['tokens_scored']}")
+    print(
+        "Interpolated trigram: "
+        f"top-1 {result['trigram_top_1_accuracy']:.1%}, "
+        f"top-{top_k} {result['trigram_top_k_accuracy']:.1%}"
+    )
+    print(
+        "Unigram baseline: "
+        f"top-1 {result['unigram_top_1_accuracy']:.1%}, "
+        f"top-{top_k} {result['unigram_top_k_accuracy']:.1%}"
+    )
 
 
 if __name__ == "__main__":

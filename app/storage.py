@@ -33,11 +33,16 @@ def _read(path: str | Path | None) -> dict[str, Any]:
         return {"rounds": []}
     try:
         data = json.loads(target.read_text(encoding="utf-8"))
-        if isinstance(data, dict) and isinstance(data.get("rounds"), list):
-            return data
-    except (json.JSONDecodeError, OSError):
-        pass
-    return {"rounds": []}
+    except json.JSONDecodeError as error:
+        raise ValueError(
+            f"History file {target} contains invalid JSON at line "
+            f"{error.lineno}, column {error.colno}."
+        ) from error
+    except OSError as error:
+        raise OSError(f"Could not read history file {target}: {error}") from error
+    if not isinstance(data, dict) or not isinstance(data.get("rounds"), list):
+        raise ValueError(f"History file {target} must contain a 'rounds' array.")
+    return data
 
 
 def load_history(path: str | Path | None = None) -> list[dict[str, Any]]:
